@@ -58,3 +58,10 @@ Enter the node where the force 0 will be applied: 1
 Enter the magnitude in X direction in N: 0
 
 Enter the magnitude in Y direction in N: -100000
+
+### Example Output
+
+[[-0.00010997]
+ [-0.00059089]]
+
+![Output result](https://github.com/carineallen/FEA_Simulation_Python/blob/master/FEA_Simulation_python2.png)
