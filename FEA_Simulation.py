@@ -1,3 +1,4 @@
+
 import numpy as np 
 import math
 import matplotlib.pyplot as plt 
@@ -55,7 +56,7 @@ def Draw_elements(fromPoint, toPoint, area,Nodes,LineColor):
 	y1 = Nodes[int(fromPoint),1]
 	x2 = Nodes[int(toPoint),0]
 	y2 = Nodes[int(toPoint),1]
-	plt.plot([x1, x2], [y1, y2], color= LineColor, linestyle='-', linewidth=200*area, zorder=1)
+	plt.plot([x1, x2], [y1, y2], color= LineColor, linestyle='-', linewidth=1.5, zorder=1)
     
 def CalculateMatrices(Parameters):
     
@@ -196,6 +197,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-        
-        
-        
