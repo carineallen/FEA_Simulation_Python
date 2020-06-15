@@ -140,8 +140,8 @@ def main():
                remove[0,r + 2] = int(n*3+2)
                r = r + 3
             elif nodes[n,2] == 1:
-               remove[0,r] = int(n*3)
-               remove[0,r + 1] = int(n*3+1)
+               remove[0,r] = int(n*3+1)
+               remove[0,r + 1] = int(n*3+2)
                r = r + 2
             elif nodes[n,2] == 2:
                remove[0,r] = int(n*3+1)
@@ -160,7 +160,7 @@ def main():
                 ForcePosition = int(Forces[j,0])
                 if ForcePosition == i:
                     ForceVector = ForceVector + np.array([[Forces[j,1]],[Forces[j,2]],[Forces[j,3]]])
-            #KC = K[i*2:i*2+2,i*2:i*2+2]
+             #KC = K[i*2:i*2+2,i*2:i*2+2]
             try:
                   deformation = np.linalg.inv(KC).dot(ForceVector)
             except:
@@ -174,12 +174,15 @@ def main():
     #plot element with new cordenates
     plot_nodes(nodes,N_nodes)
     for g in range(0,int(N_elements)):
-        x1 = nodes[int(elements[g,0]),0]
-        x2 = nodes[int(elements[g,1]),0]
+        x1 = nodes[int(elements[g,0]),0] - nodes[int(elements[g,0]),0]
+        x2 = nodes[int(elements[g,1]),0] - nodes[int(elements[g,0]),0]
         y1 = nodes[int(elements[g,0]),1]
         y2 = nodes[int(elements[g,1]),1]
         theta1 = D[int(elements[g,0])*3+2,0]
         theta2 = D[int(elements[g,1])*3+2,0]
+        
+        if (y1 > y2):
+            x1 = x1 * (-1)
         
         CoefMat =np.array([[x1**3,x1**2,x1,1],
                            [x2**3,x2**2,x2,1],
@@ -196,9 +199,9 @@ def main():
         X_axis = np.zeros((1,20))
         Y_axis = np.zeros((1,20))
         for r in range(1,20):
-            X_axis[0,r] = r*(distance/20)
+            X_axis[0,r] = r*(distance/20) + nodes[int(elements[g,0]),0]
         for b in range(1,20):
-            Y_axis[0,b] = z_final[0,0]*X_axis[0,b]**3 + z_final[1,0]*X_axis[0,b]**2 + z_final[2,0]*X_axis[0,b] +z_final[3,0]
+            Y_axis[0,b] = z_final[0,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0])**3 + z_final[1,0]*(X_axis[0,b]- nodes[int(elements[g,0]),0])**2 + z_final[2,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0]) +z_final[3,0]
         plt.plot(X_axis, Y_axis,'ro')
 
 if __name__ == '__main__':
