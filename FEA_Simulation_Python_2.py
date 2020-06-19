@@ -1,6 +1,7 @@
 import numpy as np 
 import math
 import matplotlib.pyplot as plt 
+import scipy.linalg as la
 
 def InitializeComponents():
     
@@ -24,6 +25,8 @@ def InitializeComponents():
         Angle = float(input("Enter the angle in degree: "))
         Vector = [Nodes[int(RigthNode),0] - Nodes[int(LeftNode),0], Nodes[int(RigthNode),1] - Nodes[int(LeftNode),1]]
         Length = np.linalg.norm(Vector)
+        if (Length < 0):
+            Length = Length*(-1)
         cosine = math.cos(Angle*np.pi / 180)
         sine = math.sin(Angle*np.pi /180)
         Elements[j,:] = [LeftNode,RigthNode,YoungModulus,Area,Length,cosine,sine,M_Inercia]
@@ -72,6 +75,7 @@ def CalculateMatrices(Parameters):
         
     #construct striffness matrix
     K = np.zeros((int(N_nodes) * 3,int(N_nodes) * 3))
+    KG = np.zeros((int(N_nodes) * 3,int(N_nodes) * 3))
     for j in range(0,int(N_elements)):
      E = elements[j,2]
      A = elements[j,3]
@@ -86,20 +90,30 @@ def CalculateMatrices(Parameters):
                    [0,0,0,c,s,0],
                    [0,0,0,-s,c,0],
                    [0,0,0,0,0,1]])
+     
      T_Tranpose = T.transpose()
      
      K_1 = np.array([[E*A/L,0,0,-E*A/L,0,0],
                    [0,12*E*I/L**3,6*E*I/L**2,0,-12*E*I/L**3,6*E*I/L**2],
                    [0,6*E*I/L**2,4*E*I/L,0,-6*E*I/L**2,2*E*I/L],
                    [-E*A/L,0,0,E*A/L,0,0],
-                   [0,-12*E*I/L**3,6*E*I/L**2,0,12*E*I/L**3,-6*E*I/L**2],
+                   [0,-12*E*I/L**3,-6*E*I/L**2,0,12*E*I/L**3,-6*E*I/L**2],
                    [0,6*E*I/L**2,2*E*I/L,0,-6*E*I/L**2,4*E*I/L]])
      
-     K_element = (T_Tranpose.dot(K_1)).dot(T)
+     K_G = np.array([[0,0,0,0,0,0],
+                   [0,(36/30)/L,(1/10),0,-(36/30)/L,(1/10)],
+                   [0,(1/10),(4/30)*L,0,-(1/10),-(1/30)*L],
+                   [0,0,0,0,0,0],
+                   [0,-(36/30)/L,-(1/10),0,(36/30)/L,-(1/10)],
+                   [0,(1/10),-(1/30)*L,0,-(1/10),(4/30)*L]])
+     
+     K_element = T_Tranpose.dot(K_1).dot(T)
+     KG_element = T_Tranpose.dot(K_G).dot(T)
      #add to global matrix
      K[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =K[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ K_element
-        
-    return { 'K':K, 'N_Forces':N_Forces, 'Forces':Forces}
+     KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ KG_element  
+     
+    return { 'K':K, 'N_Forces':N_Forces, 'Forces':Forces, 'KG':KG}
      
 #main function
 def main():
@@ -113,10 +127,12 @@ def main():
     #Calculete the Stiffness Matrix and Force Vector
     Results = CalculateMatrices(Parameters)
     K    = Results['K']
+    KG    = Results['KG']
     Forces    = Results['Forces']
     N_Forces    = Results['N_Forces']
     
     KC = K
+    KG_F = KG
     
     #remove the Fixed Nodes
     N_Nodes_reemove = 0
@@ -140,8 +156,8 @@ def main():
                remove[0,r + 2] = int(n*3+2)
                r = r + 3
             elif nodes[n,2] == 1:
-               remove[0,r] = int(n*3+1)
-               remove[0,r + 1] = int(n*3+2)
+               remove[0,r] = int(n*3)
+               remove[0,r + 1] = int(n*3+1)
                r = r + 2
             elif nodes[n,2] == 2:
                remove[0,r] = int(n*3+1)
@@ -150,10 +166,14 @@ def main():
     #print(remove)          
     KC = np.delete(KC,remove,0)
     KC = np.delete(KC,remove,1)
+    KG_F = np.delete(KG_F,remove,0)
+    KG_F = np.delete(KG_F,remove,1)
     
+    print("K: ")
     print(KC)
     #Calculate deformation for each free node
-    D = np.zeros((int(N_nodes)*3,1))
+    deformations = np.zeros((int(N_nodes)*3,1))
+    F = np.zeros((int(N_nodes)*3,1))
     for i in range(0,int(N_nodes)):
             ForceVector = np.zeros((3,1))
             for j in range(0,int(N_Forces)):
@@ -161,16 +181,50 @@ def main():
                 if ForcePosition == i:
                     ForceVector = ForceVector + np.array([[Forces[j,1]],[Forces[j,2]],[Forces[j,3]]])
              #KC = K[i*2:i*2+2,i*2:i*2+2]
-            try:
-                  deformation = np.linalg.inv(KC).dot(ForceVector)
-            except:
-                  deformation = ForceVector / KC[0,0]
                   
-            D[i*3:i*3+3,0] = D[i*3:i*3+3,0] + deformation[0:3,0]
-            #print(deformation)
-            nodes[i,0] = float(nodes[i,0]) + float(deformation[0,0])
-            nodes[i,1] = float(nodes[i,1]) + float(deformation[1,0])
-    print(D)      
+            F[i*3:i*3+3,0] = F[i*3:i*3+3,0] + ForceVector[0:3,0]
+            
+    F = np.delete(F,remove,0)
+    try:
+        #D2 =np.linalg.inv(KC).dot(F.transpose())
+        D =np.linalg.lstsq(KC, F)
+    except:
+        D = F / KC[0,0]
+     
+    D = D[0]
+    
+    r = 0
+    h = 0
+    for i in range(0,int(N_nodes)):
+        if nodes[i,2] == 3:
+               nodes[i,0] = float(nodes[i,0]) + float( D[r,0])
+               nodes[i,1] = float(nodes[i,1]) + float( D[r+1,0])
+               deformations[h,0] = float( D[r,0])
+               deformations[h+1,0] = float( D[r+1,0])
+               deformations[h+2,0] = float( D[r+2,0])
+               r = r + 3
+               h = h + 3
+        elif nodes[i,2] == 2:
+               nodes[i,0] = float(nodes[i,0]) + float( D[r,0])
+               deformations[h,0] = float( D[r,0])
+               deformations[h+1,0] = 0
+               deformations[h+2,0] = float( D[r+1,0])
+               r = r + 2
+               h = h + 3
+        elif nodes[i,2] == 1:
+            deformations[h,0] = 0
+            deformations[h+1,0] = 0
+            deformations[h+2,0] = float( D[r,0])
+            r = r + 1
+            h = h + 3
+        elif nodes[i,2] == 0:
+            deformations[h,0] = 0
+            deformations[h+1,0] = 0
+            deformations[h+2,0] = 0
+            h = h + 3
+        
+    print("Deformation: ")
+    print(D)       
     #plot element with new cordenates
     plot_nodes(nodes,N_nodes)
     for g in range(0,int(N_elements)):
@@ -178,11 +232,15 @@ def main():
         x2 = nodes[int(elements[g,1]),0] - nodes[int(elements[g,0]),0]
         y1 = nodes[int(elements[g,0]),1]
         y2 = nodes[int(elements[g,1]),1]
-        theta1 = D[int(elements[g,0])*3+2,0]
-        theta2 = D[int(elements[g,1])*3+2,0]
+        try:
+            theta1 = deformations[int(elements[g,0])*3+2,0]
+        except:
+            theta1 = 0
+        try:
+            theta2 = deformations[int(elements[g,1])*3+2,0]
+        except:
+            theta2 = 0 
         
-        if (y1 > y2):
-            x1 = x1 * (-1)
         
         CoefMat =np.array([[x1**3,x1**2,x1,1],
                            [x2**3,x2**2,x2,1],
@@ -194,18 +252,24 @@ def main():
         z_final = z[0]
         print("y(x) = " + str(float(z_final[0,0])) + "x^3 + (" + str(float(z_final[1,0])) + ")x^2 + (" + str(float(z_final[2,0])) + ")x + (" + str(float(z_final[3,0])) + ")" )
         print("M(x) = " + str(float(elements[g,2])*float(elements[g,7]) * 6 * float(z_final[0,0])) + "x + (" + str(float(elements[g,2])*float(elements[g,7]) * 2 * float(z_final[1,0])) + ")")
+        print("coefficients:")
         print(z_final)
         distance = x2 - x1
         X_axis = np.zeros((1,20))
         Y_axis = np.zeros((1,20))
         for r in range(1,20):
-            X_axis[0,r] = r*(distance/20) + nodes[int(elements[g,0]),0]
+            X_axis[0,r] = (r*(distance/20) + nodes[int(elements[g,0]),0])
         for b in range(1,20):
-            Y_axis[0,b] = z_final[0,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0])**3 + z_final[1,0]*(X_axis[0,b]- nodes[int(elements[g,0]),0])**2 + z_final[2,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0]) +z_final[3,0]
+            Y_axis[0,b] = (z_final[0,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0])**3 + z_final[1,0]*(X_axis[0,b]- nodes[int(elements[g,0]),0])**2 + z_final[2,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0]) +z_final[3,0])
         plt.plot(X_axis, Y_axis,'ro')
-
+        
+    
+    eigvals, eigvecs = la.eig(KC,KG_F)
+    eigvals = eigvals.real
+    print("estimated critical loads: ")
+    print(eigvals)
+    
+    
 if __name__ == '__main__':
 	main()
-        
-        
         
