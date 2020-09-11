@@ -44,6 +44,7 @@ def InitializeComponents():
     return {  'Nodes':Nodes, 'N_nodes':N_nodes,   \
 	      	  'Elements':Elements, 'N_elements':N_elements}
          
+#Function to plot the Nodes
 def plot_nodes(Nodes,N_nodes):
     for i in range(0,int(N_nodes)):
          x = Nodes[i,0]
@@ -51,16 +52,17 @@ def plot_nodes(Nodes,N_nodes):
          size = 400
          plt.scatter(x, y, c='b', s=size, zorder=5)
         
+#Function to plot the elements
 def Draw_elements(fromPoint, toPoint, area,Nodes,LineColor):
 	x1 = Nodes[int(fromPoint),0]
 	y1 = Nodes[int(fromPoint),1]
 	x2 = Nodes[int(toPoint),0]
 	y2 = Nodes[int(toPoint),1]
 	plt.plot([x1, x2], [y1, y2], color= LineColor, linestyle='-', linewidth=1.5, zorder=1)
-    
+
+
 def CalculateMatrices(Parameters):
     
-    nodes    = Parameters['Nodes']
     elements    = Parameters['Elements']
     N_elements    = Parameters['N_elements']
     N_nodes    = Parameters['N_nodes']
@@ -76,6 +78,7 @@ def CalculateMatrices(Parameters):
     #construct striffness matrix
     K = np.zeros((int(N_nodes) * 3,int(N_nodes) * 3))
     KG = np.zeros((int(N_nodes) * 3,int(N_nodes) * 3))
+    M = np.zeros((int(N_nodes) * 3,int(N_nodes) * 3))
     for j in range(0,int(N_elements)):
      E = elements[j,2]
      A = elements[j,3]
@@ -90,9 +93,11 @@ def CalculateMatrices(Parameters):
                    [0,0,0,c,s,0],
                    [0,0,0,-s,c,0],
                    [0,0,0,0,0,1]])
+     st = 392064.6119
      
      T_Tranpose = T.transpose()
      
+     #stiffness matrix
      K_1 = np.array([[E*A/L,0,0,-E*A/L,0,0],
                    [0,12*E*I/L**3,6*E*I/L**2,0,-12*E*I/L**3,6*E*I/L**2],
                    [0,6*E*I/L**2,4*E*I/L,0,-6*E*I/L**2,2*E*I/L],
@@ -100,6 +105,7 @@ def CalculateMatrices(Parameters):
                    [0,-12*E*I/L**3,-6*E*I/L**2,0,12*E*I/L**3,-6*E*I/L**2],
                    [0,6*E*I/L**2,2*E*I/L,0,-6*E*I/L**2,4*E*I/L]])
      
+     #geometric stiffness matrix
      K_G = np.array([[0,0,0,0,0,0],
                    [0,(36/30)/L,(1/10),0,-(36/30)/L,(1/10)],
                    [0,(1/10),(4/30)*L,0,-(1/10),-(1/30)*L],
@@ -107,13 +113,22 @@ def CalculateMatrices(Parameters):
                    [0,-(36/30)/L,-(1/10),0,(36/30)/L,-(1/10)],
                    [0,(1/10),-(1/30)*L,0,-(1/10),(4/30)*L]])
      
+     #Mass matrix
+     K_M = np.array([[(140/420)*(st*A)*L,0,0,(70/420)*(st*A)*L,0,0],
+                    [0,(156/420)*(st*A)*L,(22/420)*(st*A)*L**2,0,(54/420)*(st*A)*L,-(13/420)*(st*A)*L**2],
+                    [0,(22/420)*(st*A)*L**2,(4/420)*(st*A)*L**3,0,(13/420)*(st*A)*L**2,-(3/420)*(st*A)*L**3],
+                    [(70/420)*(st*A)*L,0,0,(140/420)*(st*A)*L,0,0],
+                    [0,(54/420)*(st*A)*L,(13/420)*(st*A)*L**2,0,(156/420)*(st*A)*L,-(22/420)*(st*A)*L**2],
+                    [0,-(13/420)*(st*A)*L**2,-(3/420)*(st*A)*L**3,0,-(22/420)*(st*A)*L**2,(4/420)*(st*A)*L**3]])
+     
      K_element = T_Tranpose.dot(K_1).dot(T)
      KG_element = T_Tranpose.dot(K_G).dot(T)
      #add to global matrix
      K[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =K[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ K_element
-     KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ KG_element  
+     KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =KG[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ KG_element 
+     M[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3] =M[int(elements[j,0])*3:int(elements[j,1])*3+3,int(elements[j,0]*3):int(elements[j,1])*3+3]+ K_M
      
-    return { 'K':K, 'N_Forces':N_Forces, 'Forces':Forces, 'KG':KG}
+    return { 'K':K, 'N_Forces':N_Forces, 'Forces':Forces, 'KG':KG, 'M':M}
      
 #main function
 def main():
@@ -128,11 +143,16 @@ def main():
     Results = CalculateMatrices(Parameters)
     K    = Results['K']
     KG    = Results['KG']
+    M    = Results['M']
     Forces    = Results['Forces']
     N_Forces    = Results['N_Forces']
     
     KC = K
     KG_F = KG
+    M_F = M
+    
+    print("Global Stiffness matrix:")
+    print("K = " + str(K) + "\n")
     
     #remove the Fixed Nodes
     N_Nodes_reemove = 0
@@ -143,10 +163,7 @@ def main():
                N_Nodes_reemove = N_Nodes_reemove + 2
             elif nodes[d,2] == 2:
                N_Nodes_reemove = N_Nodes_reemove + 1
-               #np.delete(KC,d*2,0)
-               #np.delete(KC,d*2 + 1,0)
-               #np.delete(KC,d*2,1)
-               #np.delete(KC,d*2 + 1,1)
+               
     remove = np.zeros((1,N_Nodes_reemove), dtype=int)
     r = 0
     for n in range(0,int(N_nodes)):
@@ -162,15 +179,17 @@ def main():
             elif nodes[n,2] == 2:
                remove[0,r] = int(n*3+1)
                r = r + 1
-               
-    #print(remove)          
+                        
     KC = np.delete(KC,remove,0)
     KC = np.delete(KC,remove,1)
     KG_F = np.delete(KG_F,remove,0)
     KG_F = np.delete(KG_F,remove,1)
+    M_F = np.delete(M_F,remove,0)
+    M_F = np.delete(M_F,remove,1)
     
-    print("K: ")
-    print(KC)
+    print("Contrained Stiffness matrix")
+    print("K: " + str(KC) + "\n")
+
     #Calculate deformation for each free node
     deformations = np.zeros((int(N_nodes)*3,1))
     F = np.zeros((int(N_nodes)*3,1))
@@ -180,13 +199,12 @@ def main():
                 ForcePosition = int(Forces[j,0])
                 if ForcePosition == i:
                     ForceVector = ForceVector + np.array([[Forces[j,1]],[Forces[j,2]],[Forces[j,3]]])
-             #KC = K[i*2:i*2+2,i*2:i*2+2]
+
                   
             F[i*3:i*3+3,0] = F[i*3:i*3+3,0] + ForceVector[0:3,0]
             
     F = np.delete(F,remove,0)
     try:
-        #D2 =np.linalg.inv(KC).dot(F.transpose())
         D =np.linalg.lstsq(KC, F)
     except:
         D = F / KC[0,0]
@@ -222,9 +240,10 @@ def main():
             deformations[h+1,0] = 0
             deformations[h+2,0] = 0
             h = h + 3
-        
-    print("Deformation: ")
-    print(D)       
+
+     
+    print("Deformation:")
+    print(str(D) + "\n")       
     #plot element with new cordenates
     plot_nodes(nodes,N_nodes)
     for g in range(0,int(N_elements)):
@@ -232,12 +251,15 @@ def main():
         x2 = nodes[int(elements[g,1]),0] - nodes[int(elements[g,0]),0]
         y1 = nodes[int(elements[g,0]),1]
         y2 = nodes[int(elements[g,1]),1]
+        
+        angle = math.acos(float(elements[g,5]))
+        
         try:
-            theta1 = deformations[int(elements[g,0])*3+2,0]
+            theta1 = angle + deformations[int(elements[g,0])*3+2,0]
         except:
             theta1 = 0
         try:
-            theta2 = deformations[int(elements[g,1])*3+2,0]
+            theta2 = angle + deformations[int(elements[g,1])*3+2,0]
         except:
             theta2 = 0 
         
@@ -250,26 +272,38 @@ def main():
         B=np.array([[y1],[y2],[theta1],[theta2]])
         z = np.linalg.lstsq(CoefMat,B)
         z_final = z[0]
-        print("y(x) = " + str(float(z_final[0,0])) + "x^3 + (" + str(float(z_final[1,0])) + ")x^2 + (" + str(float(z_final[2,0])) + ")x + (" + str(float(z_final[3,0])) + ")" )
-        print("M(x) = " + str(float(elements[g,2])*float(elements[g,7]) * 6 * float(z_final[0,0])) + "x + (" + str(float(elements[g,2])*float(elements[g,7]) * 2 * float(z_final[1,0])) + ")")
+        print("y(x) = " + str(float(z_final[0,0])) + "x^3 + (" + str(float(z_final[1,0])) + ")x^2 + (" + str(float(z_final[2,0])) + ")x + (" + str(float(z_final[3,0])) + ")\n" )
+        print("M(x) = " + str(float(elements[g,2])*float(elements[g,7]) * 6 * float(z_final[0,0])) + "x + (" + str(float(elements[g,2])*float(elements[g,7]) * 2 * float(z_final[1,0])) + ")\n")
         print("coefficients:")
-        print(z_final)
+        print(str(z_final) + "\n")
         distance = x2 - x1
         X_axis = np.zeros((1,20))
         Y_axis = np.zeros((1,20))
+        scale_factor = 50
+        A = z_final[0,0]
+        B = z_final[1,0]
+        C = z_final[2,0]
+        D = z_final[3,0] 
         for r in range(1,20):
             X_axis[0,r] = (r*(distance/20) + nodes[int(elements[g,0]),0])
         for b in range(1,20):
-            Y_axis[0,b] = (z_final[0,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0])**3 + z_final[1,0]*(X_axis[0,b]- nodes[int(elements[g,0]),0])**2 + z_final[2,0]*(X_axis[0,b] - nodes[int(elements[g,0]),0]) +z_final[3,0])
+            Y_axis[0,b] = (A*(X_axis[0,b] - nodes[int(elements[g,0]),0])**3 + B*(X_axis[0,b]- nodes[int(elements[g,0]),0])**2 + C*(X_axis[0,b] - nodes[int(elements[g,0]),0]) +D)
         plt.plot(X_axis, Y_axis,'ro')
         
     
     eigvals, eigvecs = la.eig(KC,KG_F)
     eigvals = eigvals.real
     print("estimated critical loads: ")
-    print(eigvals)
+    print(str(eigvals) + "\n")
+    
+    eigvals2, eigvecs2 = la.eig(KC,M_F)
+    eigvals2 = eigvals2.real
+    print("estimated eigfrequencies: ")
+    print(str(eigvals2) + "\n")
     
     
 if __name__ == '__main__':
 	main()
+        
+        
         
